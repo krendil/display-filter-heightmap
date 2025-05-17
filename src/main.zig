@@ -6,12 +6,13 @@ const gtk = @import("gtk");
 const gobject = @import("gobject");
 const gimp = @cImport({
     @cInclude("gtk/gtk.h");
-    @cInclude("gimp.h");
-    @cInclude("gimpcolor.h");
-    @cInclude("gimpconfig.h");
-    @cInclude("gimpmath.h");
-    @cInclude("gimpmodule.h");
-    @cInclude("gimpwidgets.h");
+    @cInclude("libgimp/gimp.h");
+    @cInclude("libgimp/gimpui.h");
+    @cInclude("libgimpcolor/gimpcolor.h");
+    @cInclude("libgimpconfig/gimpconfig.h");
+    @cInclude("libgimpmath/gimpmath.h");
+    @cInclude("libgimpmodule/gimpmodule.h");
+    @cInclude("libgimpwidgets/gimpwidgets.h");
 });
 
 // #include "libgimpcolor/gimpcolor.h"
@@ -25,11 +26,14 @@ const gimp = @cImport({
 const DisplayFalseColour = extern struct {
     parent_instance: gimp.GimpColorDisplay,
 
+    gradient: *gimp.GimpGradient,
+
     pub const Parent = gimp.GimpColorDisplay;
 
     // pub const getGObjectType = gobject.ext.defineClass(DisplayFalseColour, .{
     //     .classInit = &Class.init,
     // });
+
 
     pub fn new() *DisplayFalseColour {
         return gobject.ext.newInstance(DisplayFalseColour, .{ });
@@ -40,13 +44,30 @@ const DisplayFalseColour = extern struct {
     }
 
     fn convertBuffer(
-        _: *gimp.GimpColorDisplay,
-        _: *gegl.GeglBuffer,
-        _: *gegl.GeglRectangle
+        self: *DisplayFalseColour,
+        buffer: *gegl.GeglBuffer,
+        area: *gegl.GeglRectangle
     ) callconv(.c) void {
+        const it: *gegl.GeglBufferIterator = gegl.gegl_buffer_iterator_new(
+            buffer, area, 0, gegl.babl_format("R'G'B'A float"),
+            gegl.GEGL_ACCESS_READWRITE, gegl.GEGL_ABYSS_NONE, 1);
+
+        while(gegl.gegl_buffer_iterator_next(it) != 0) {
+            const dataPtr: [*c][4]f32 = @alignCast(@ptrCast(it.items()[0].data));
+            const dataSlice = dataPtr[0..@intCast(it.length)];
+            for(dataSlice) |*pixel| {
+                pixel[0..3].* = self.mapColour(0);
+            }
+        }
     }
 
-    fn configure(_: *gimp.GimpColorDisplay) callconv(.c) ?*gtk.Widget {
+    fn mapColour(_: *const DisplayFalseColour, value: f32) [3]f32 {
+        return .{value, value, value};
+    }
+
+    fn configure(_: *DisplayFalseColour) callconv(.c) ?*gtk.Widget {
+        //const gradientPicker = gimp.gimp_gradient_chooser_new("Gradient", "Gradient", self.gradient);
+        //return @ptrCast(gradientPicker);
         return null;
     }
 
@@ -86,24 +107,6 @@ const DisplayFalseColour = extern struct {
 };
 
 
-
-// GType              cdisplay_contrast_get_type        (void);
-//
-// static void        cdisplay_contrast_set_property    (GObject          *object,
-//                                                       guint             property_id,
-//                                                       const GValue     *value,
-//                                                       GParamSpec       *pspec);
-// static void        cdisplay_contrast_get_property    (GObject          *object,
-//                                                       guint             property_id,
-//                                                       GValue           *value,
-//                                                       GParamSpec       *pspec);
-//
-// static void        cdisplay_contrast_convert_buffer  (GimpColorDisplay *display,
-//                                                       GeglBuffer       *buffer,
-//                                                       GeglRectangle    *area);
-// static void        cdisplay_contrast_set_contrast    (CdisplayContrast *contrast,
-//                                                       gdouble           value);
-
 // GimpModule declares these non-const for some reason
 
 var purpose = "False colour display filter".*;
@@ -122,10 +125,6 @@ var display_falsecolour_info: gimp.GimpModuleInfo =
 };
 
 
-// G_DEFINE_DYNAMIC_TYPE (CdisplayContrast, cdisplay_contrast,
-//                        GIMP_TYPE_COLOR_DISPLAY)
-//
-//
 export fn gimp_module_query (_: *gobject.TypeModule) callconv(.C) *gimp.GimpModuleInfo
 {
     return &display_falsecolour_info;
@@ -156,122 +155,3 @@ export fn gimp_module_register(module: *gobject.TypeModule) callconv(.C) bool
     return true;
 }
 
-
-//
-// static void
-// cdisplay_contrast_class_init (CdisplayContrastClass *klass)
-// {
-//   GObjectClass          *object_class  = G_OBJECT_CLASS (klass);
-//   GimpColorDisplayClass *display_class = GIMP_COLOR_DISPLAY_CLASS (klass);
-//
-//   object_class->get_property     = cdisplay_contrast_get_property;
-//   object_class->set_property     = cdisplay_contrast_set_property;
-//
-//   GIMP_CONFIG_PROP_DOUBLE (object_class, PROP_CONTRAST,
-//                            "contrast",
-//                            _("Contrast cycles"),
-//                            NULL,
-//                            0.01, 10.0, DEFAULT_CONTRAST,
-//                            0);
-//
-//   display_class->name            = _("Contrast");
-//   display_class->help_id         = "gimp-colordisplay-contrast";
-//   display_class->icon_name       = GIMP_ICON_DISPLAY_FILTER_CONTRAST;
-//
-//   display_class->convert_buffer  = cdisplay_contrast_convert_buffer;
-// }
-//
-// static void
-// cdisplay_contrast_class_finalize (CdisplayContrastClass *klass)
-// {
-// }
-//
-// static void
-// cdisplay_contrast_init (CdisplayContrast *contrast)
-// {
-// }
-//
-// static void
-// cdisplay_contrast_get_property (GObject    *object,
-//                                 guint       property_id,
-//                                 GValue     *value,
-//                                 GParamSpec *pspec)
-// {
-//   CdisplayContrast *contrast = CDISPLAY_CONTRAST (object);
-//
-//   switch (property_id)
-//     {
-//     case PROP_CONTRAST:
-//       g_value_set_double (value, contrast->contrast);
-//       break;
-//     default:
-//       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-//       break;
-//     }
-// }
-//
-// static void
-// cdisplay_contrast_set_property (GObject      *object,
-//                                 guint         property_id,
-//                                 const GValue *value,
-//                                 GParamSpec   *pspec)
-// {
-//   CdisplayContrast *contrast = CDISPLAY_CONTRAST (object);
-//
-//   switch (property_id)
-//     {
-//     case PROP_CONTRAST:
-//       cdisplay_contrast_set_contrast (contrast, g_value_get_double (value));
-//       break;
-//     default:
-//       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-//       break;
-//     }
-// }
-//
-// static void
-// cdisplay_contrast_convert_buffer (GimpColorDisplay *display,
-//                                   GeglBuffer       *buffer,
-//                                   GeglRectangle    *area)
-// {
-//   CdisplayContrast   *contrast = CDISPLAY_CONTRAST (display);
-//   GeglBufferIterator *iter;
-//   gfloat              c;
-//
-//   c = contrast->contrast * 2 * G_PI;
-//
-//   iter = gegl_buffer_iterator_new (buffer, area, 0,
-//                                    babl_format ("R'G'B'A float"),
-//                                    GEGL_ACCESS_READWRITE, GEGL_ABYSS_NONE, 1);
-//
-//   while (gegl_buffer_iterator_next (iter))
-//     {
-//       gfloat *data  = iter->items[0].data;
-//       gint    count = iter->length;
-//
-//       while (count--)
-//         {
-//           *data = 0.5 * (1.0 + sin (c * *data)); data++;
-//           *data = 0.5 * (1.0 + sin (c * *data)); data++;
-//           *data = 0.5 * (1.0 + sin (c * *data)); data++;
-//
-//           data++;
-//         }
-//     }
-// }
-//
-// static void
-// cdisplay_contrast_set_contrast (CdisplayContrast *contrast,
-//                                 gdouble           value)
-// {
-//   if (value <= 0.0)
-//     value = 1.0;
-//
-//   if (value != contrast->contrast)
-//     {
-//       contrast->contrast = value;
-//
-//       g_object_notify (G_OBJECT (contrast), "contrast");
-//       gimp_color_display_changed (GIMP_COLOR_DISPLAY (contrast));
-//     }
-// }

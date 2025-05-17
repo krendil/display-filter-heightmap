@@ -25,13 +25,9 @@ pub fn build(b: *std.Build) void {
     lib.linkSystemLibrary("gimpui-3.0");
     lib.linkSystemLibrary("gimpwidgets-3.0");
 
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimp"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpcolor"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpconfig"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpmath"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpmodule"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpui"});
-    lib.addSystemIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0/libgimpwidgets"});
+    lib.addIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0"});
+    lib.addIncludePath(.{ .cwd_relative = "/usr/include/gegl-0.4"});
+    lib.addIncludePath(.{ .cwd_relative = "/usr/include/babl-0.1"});
 
     const gobject = b.dependency("gobject", .{});
     lib.root_module.addImport("gdk", gobject.module("gdk3"));
