@@ -25,15 +25,20 @@ pub fn build(b: *std.Build) void {
     lib.linkSystemLibrary("gimpui-3.0");
     lib.linkSystemLibrary("gimpwidgets-3.0");
 
-    lib.addIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0"});
-    lib.addIncludePath(.{ .cwd_relative = "/usr/include/gegl-0.4"});
-    lib.addIncludePath(.{ .cwd_relative = "/usr/include/babl-0.1"});
+    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0"});
+    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/gegl-0.4"});
+    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/babl-0.1"});
 
-    const gobject = b.dependency("gobject", .{});
-    lib.root_module.addImport("gdk", gobject.module("gdk3"));
-    lib.root_module.addImport("glib", gobject.module("glib2"));
-    lib.root_module.addImport("gobject", gobject.module("gobject2"));
-    lib.root_module.addImport("gtk", gobject.module("gtk3"));
+
+    const gimp = b.dependency("gimp", .{});
+    lib.root_module.addImport("gdk", gimp.module("gdk3"));
+    lib.root_module.addImport("glib", gimp.module("glib2"));
+    lib.root_module.addImport("gobject", gimp.module("gobject2"));
+    lib.root_module.addImport("gtk", gimp.module("gtk3"));
+    lib.root_module.addImport("babl", gimp.module("babl0"));
+    lib.root_module.addImport("gegl", gimp.module("gegl0"));
+    lib.root_module.addImport("gimp", gimp.module("gimp3"));
+    lib.root_module.addImport("gimpui", gimp.module("gimpui3"));
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when

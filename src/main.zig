@@ -1,19 +1,11 @@
+const std = @import("std");
 
-const gegl = @cImport({
-    @cInclude("gegl.h");
-});
+const babl = @import("babl");
+const gegl = @import("gegl");
 const gtk = @import("gtk");
 const gobject = @import("gobject");
-const gimp = @cImport({
-    @cInclude("gtk/gtk.h");
-    @cInclude("libgimp/gimp.h");
-    @cInclude("libgimp/gimpui.h");
-    @cInclude("libgimpcolor/gimpcolor.h");
-    @cInclude("libgimpconfig/gimpconfig.h");
-    @cInclude("libgimpmath/gimpmath.h");
-    @cInclude("libgimpmodule/gimpmodule.h");
-    @cInclude("libgimpwidgets/gimpwidgets.h");
-});
+const gimp = @import("gimp");
+const gimpui = @import("gimpui");
 
 // #include "libgimpcolor/gimpcolor.h"
 // #include "libgimpconfig/gimpconfig.h"
@@ -23,12 +15,35 @@ const gimp = @cImport({
 //
 // #include "libgimp/libgimp-intl.h"
 
+fn getDefaultGradient() *gimp.Gradient {
+    const rainbowN = gimp.Gradient.getByName("Full Saturation Spectrum CCW");
+    if(rainbowN) |rainbow| {
+        return rainbow;
+    } else {
+        return gimp.Gradient.new();
+    }
+}
+const defaultGradient = getDefaultGradient();
+
 const DisplayFalseColour = extern struct {
-    parent_instance: gimp.GimpColorDisplay,
+    parent_instance: gimpui.ColorDisplay,
 
-    gradient: *gimp.GimpGradient,
+    gradient: ?*gimp.Gradient,
 
-    pub const Parent = gimp.GimpColorDisplay;
+    pub const Parent = gimpui.ColorDisplay;
+
+    pub const properties = struct {
+
+        pub const gradient = struct {
+            pub const name = "gradient";
+            const impl = gobject.ext.defineProperty(name, DisplayFalseColour, ?*gimp.Gradient, .{
+                .nick = "Gradient",
+                .blurb = "The gradient to map values to",
+                .default = null,
+                .accessor = gobject.ext.fieldAccessor(DisplayFalseColour, "gradient")
+            });
+        };
+    };
 
     // pub const getGObjectType = gobject.ext.defineClass(DisplayFalseColour, .{
     //     .classInit = &Class.init,
@@ -45,33 +60,38 @@ const DisplayFalseColour = extern struct {
 
     fn convertBuffer(
         self: *DisplayFalseColour,
-        buffer: *gegl.GeglBuffer,
-        area: *gegl.GeglRectangle
+        buffer: *gegl.Buffer,
+        area: *gegl.Rectangle
     ) callconv(.c) void {
-        const it: *gegl.GeglBufferIterator = gegl.gegl_buffer_iterator_new(
-            buffer, area, 0, gegl.babl_format("R'G'B'A float"),
-            gegl.GEGL_ACCESS_READWRITE, gegl.GEGL_ABYSS_NONE, 1);
+        const it: *gegl.BufferIterator = buffer.iteratorNew(
+            area, 0, babl.format("R'G'B'A float"),
+            gegl.AccessMode.flags_readwrite, .none, 1);
 
-        while(gegl.gegl_buffer_iterator_next(it) != 0) {
-            const dataPtr: [*c][4]f32 = @alignCast(@ptrCast(it.items()[0].data));
-            const dataSlice = dataPtr[0..@intCast(it.length)];
-            for(dataSlice) |*pixel| {
-                pixel[0..3].* = self.mapColour(0);
+        while(it.next() != 0) {
+            if(it.f_items) |items| {
+                const dataPtr: [*c][4]f32 = @ptrCast(items);
+                const dataSlice = dataPtr[0..@intCast(it.f_length)];
+                for(dataSlice) |*pixel| {
+                    // @memcpy(pixel[0..12], std.mem.sliceAsBytes(self.mapColour(0)));
+                    pixel[0..3].* = self.mapColour(0);
+                }
+            } else {
+                break;
             }
         }
     }
 
-    fn mapColour(_: *const DisplayFalseColour, value: f32) [3]f32 {
+    fn mapColour(_: *const DisplayFalseColour, value: f32) [3] f32 {
         return .{value, value, value};
     }
 
-    fn configure(_: *DisplayFalseColour) callconv(.c) ?*gtk.Widget {
-        //const gradientPicker = gimp.gimp_gradient_chooser_new("Gradient", "Gradient", self.gradient);
-        //return @ptrCast(gradientPicker);
-        return null;
+    fn configure(_: *DisplayFalseColour) callconv(.c) *gtk.Widget {
+        // const gradientPicker = gimpui.propGradientChooserNew(self.as(gobject.Object), "gradient", "Gradient");
+        // return gradientPicker;
+        return gtk.Button.newWithLabel("Test").as(gtk.Widget);
     }
 
-    fn changed(_: *gimp.GimpColorDisplay) callconv(.c) void {
+    fn changed(_: *DisplayFalseColour) callconv(.c) void {
     }
 
     fn setProperty(_: *DisplayFalseColour, _: u32, _: ?*const gobject.Value, _: ?*gobject.ParamSpec) callconv(.c) void {
@@ -82,7 +102,7 @@ const DisplayFalseColour = extern struct {
 
 
     pub const Class = extern struct {
-        parent_class: gimp.GimpColorDisplayClass,
+        parent_class: Parent.Class,
         pub const Instance = DisplayFalseColour;
 
         pub fn as(class: *Class, comptime T: type) *T {
@@ -91,41 +111,43 @@ const DisplayFalseColour = extern struct {
 
         fn init(ptr: *gobject.TypeClass, _: ?*anyopaque) callconv(.c) void {
             const class: *Class = @ptrCast(@alignCast(ptr));
-            // const displayClass = class.as(gimp.GimpColorDisplayClass);
-            class.parent_class.convert_buffer = @ptrCast(&convertBuffer);
-            class.parent_class.configure = @ptrCast(&configure);
-            class.parent_class.changed = @ptrCast(&changed);
 
-            class.parent_class.name = "False Colour";
-            class.parent_class.help_id = "gimp-colordisplay-falsecolour";
-            class.parent_class.icon_name = "gimp-display-filter";
+            gobject.ext.registerProperties(class, &.{
+                properties.gradient.impl,
+            });
 
-            class.parent_class.parent_class.set_property = @ptrCast(&setProperty);
-            class.parent_class.parent_class.get_property = @ptrCast(&getProperty);
+            gimpui.ColorDisplay.virtual_methods.convert_buffer.implement(class, &convertBuffer);
+            // gimpui.ColorDisplay.virtual_methods.configure.implement(class, &configure);
+            // gimpui.ColorDisplay.virtual_methods.changed.implement(class, &changed);
+
+
+            class.parent_class.f_name = "False Colour";
+            class.parent_class.f_help_id = "gimp-colordisplay-falsecolour";
+            class.parent_class.f_icon_name = "gimp-display-filter";
+
         }
     };
 };
 
 
-// GimpModule declares these non-const for some reason
-
+// GimpModuleInfo declares these non-const for some reason
 var purpose = "False colour display filter".*;
 var author = "David Osborne <david.osborne@protonmail.com>".*;
 var version = "v0.1".*;
 var copyright = "(c) 2025, released under the GPL".*;
 var date = "May 16, 2025".*;
-var display_falsecolour_info: gimp.GimpModuleInfo =
+var display_falsecolour_info: gimp.ModuleInfo =
 .{
-    .abi_version = gimp.GIMP_MODULE_ABI_VERSION,
-    .purpose = &purpose,
-    .author = &author,
-    .version = &version,
-    .copyright = &copyright,
-    .date = &date,
+    .f_abi_version = gimp.MODULE_ABI_VERSION,
+    .f_purpose = &purpose,
+    .f_author = &author,
+    .f_version = &version,
+    .f_copyright = &copyright,
+    .f_date = &date,
 };
 
 
-export fn gimp_module_query (_: *gobject.TypeModule) callconv(.C) *gimp.GimpModuleInfo
+export fn gimp_module_query (_: *gobject.TypeModule) callconv(.C) *gimp.ModuleInfo
 {
     return &display_falsecolour_info;
 }
@@ -146,7 +168,7 @@ export fn gimp_module_register(module: *gobject.TypeModule) callconv(.C) bool
       };
 
     _ = module.registerType(
-        gimp.gimp_color_display_get_type(),
+        gobject.ext.typeFor(gimpui.ColorDisplay),
         "DisplayFalseColor",
         &typeInfo,
         .{}
