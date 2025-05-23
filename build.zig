@@ -4,58 +4,77 @@ const std = @import("std");
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
+    const linux = b.standardTargetOptions(.{});
+    const windows = b.resolveTargetQuery(.{
+        .os_tag = .windows,
+        .cpu_arch = .x86_64,
+        .abi = .gnu
+    });
 
     const optimize = b.standardOptimizeOption(.{});
 
     // Now, we will create a dynamic library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
     // for actually invoking the compiler.
-    const lib = b.addSharedLibrary(.{
-        .name = "display-filter-false-colour",
+    const linlib = b.addSharedLibrary(.{
+        .name = "display-filter-heightmap",
         .root_source_file =  b.path("src/main.zig"),
-        .target = target,
+        .target = linux,
         .optimize = optimize,
     });
 
-    lib.linkSystemLibrary("c");
-    lib.linkSystemLibrary("gtk+-3.0");
-    lib.linkSystemLibrary("gimp-3.0");
-    lib.linkSystemLibrary("gimpmodule-3.0");
-    lib.linkSystemLibrary("gimpui-3.0");
-    lib.linkSystemLibrary("gimpwidgets-3.0");
+    linlib.linkSystemLibrary("c");
+    linlib.linkSystemLibrary("gimp-3.0");
+    linlib.linkSystemLibrary("gimpmodule-3.0");
+    linlib.linkSystemLibrary("gimpui-3.0");
+    linlib.linkSystemLibrary("gimpwidgets-3.0");
 
-    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/gimp-3.0"});
-    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/gegl-0.4"});
-    // lib.addIncludePath(.{ .cwd_relative = "/usr/include/babl-0.1"});
-
-
-    const gimp = b.dependency("gimp", .{});
-    lib.root_module.addImport("gdk", gimp.module("gdk3"));
-    lib.root_module.addImport("glib", gimp.module("glib2"));
-    lib.root_module.addImport("gobject", gimp.module("gobject2"));
-    lib.root_module.addImport("gtk", gimp.module("gtk3"));
-    lib.root_module.addImport("babl", gimp.module("babl0"));
-    lib.root_module.addImport("gegl", gimp.module("gegl0"));
-    lib.root_module.addImport("gimp", gimp.module("gimp3"));
-    lib.root_module.addImport("gimpui", gimp.module("gimpui3"));
+    const gimp = b.dependency("gimp", .{ .target=linux, .optimize=optimize});
+    linlib.root_module.addImport("gobject", gimp.module("gobject2"));
+    linlib.root_module.addImport("babl", gimp.module("babl0"));
+    linlib.root_module.addImport("gegl", gimp.module("gegl0"));
+    linlib.root_module.addImport("gimp", gimp.module("gimp3"));
+    linlib.root_module.addImport("gimpui", gimp.module("gimpui3"));
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
+    b.installArtifact(linlib);
 
-    // // Creates a step for unit testing. This only builds the test executable
-    // // but does not run it.
-    // const unit_tests = b.addTest(.{
-    //     .root_module = lib_mod,
-    // });
-    //
-    // const build_unit_tests = b.addInstallArtifact(unit_tests, .{});
-    // const build_test_step = b.step("buildtest", "Build unit tests");
-    // build_test_step.dependOn(&build_unit_tests.step);
-    //
-    // const run_unit_tests = b.addRunArtifact(unit_tests);
-    // const test_step = b.step("test", "Run unit tests");
-    // test_step.dependOn(&run_unit_tests.step);
+
+    // Now, we will create a dynamic library based on the module we created above.
+    // This creates a `std.Build.Step.Compile`, which is the build step responsible
+    // for actually invoking the compiler.
+    const winlib = b.addSharedLibrary(.{
+        .name = "display-filter-heightmap",
+        .root_source_file =  b.path("src/main.zig"),
+        .target = windows,
+        .optimize = optimize,
+    });
+    b.addSearchPrefix("/mnt/windows/Program Files/GIMP 3/bin");
+    winlib.addLibraryPath( .{ .cwd_relative = "/mnt/windows/Program Files/GIMP 3/bin" } );
+
+    winlib.linkSystemLibrary("c");
+    winlib.linkSystemLibrary("libglib-2.0-0");
+    winlib.linkSystemLibrary("libgobject-2.0-0");
+    winlib.linkSystemLibrary("libbabl-0.1-0");
+    winlib.linkSystemLibrary("libgegl-0.4-0");
+    winlib.linkSystemLibrary("libgimp-3.0-0");
+    winlib.linkSystemLibrary("libgimpmodule-3.0-0");
+    winlib.linkSystemLibrary("libgimpui-3.0-0");
+    winlib.linkSystemLibrary("libgimpwidgets-3.0-0");
+
+
+    const gimpw = b.dependency("gimp", .{ .target=windows, .optimize=optimize});
+    winlib.root_module.addImport("gobject", gimpw.module("gobject2"));
+    winlib.root_module.addImport("babl", gimpw.module("babl0"));
+    winlib.root_module.addImport("gegl", gimpw.module("gegl0"));
+    winlib.root_module.addImport("gimp", gimpw.module("gimp3"));
+    winlib.root_module.addImport("gimpui", gimpw.module("gimpui3"));
+
+    // This declares intent for the library to be installed into the standard
+    // location when the user invokes the "install" step (the default step when
+    // running `zig build`).
+    b.installArtifact(winlib);
+
 }

@@ -2,7 +2,6 @@ const std = @import("std");
 
 const babl = @import("babl");
 const gegl = @import("gegl");
-const gtk = @import("gtk");
 const gobject = @import("gobject");
 const gimp = @import("gimp");
 const gimpui = @import("gimpui");
@@ -10,7 +9,7 @@ const gimpui = @import("gimpui");
 var positiveColours: [19]*gegl.Color = undefined;
 var negativeColours: [10]*gegl.Color = undefined; 
 
-const DisplayFalseColour = extern struct {
+const DisplayHeightmap = extern struct {
     parent_instance: gimpui.ColorDisplay,
 
     resolution: c_uint,
@@ -32,11 +31,11 @@ const DisplayFalseColour = extern struct {
 
         pub const resolution = struct {
             pub const name = "resolution";
-            const impl = gobject.ext.defineProperty(name, DisplayFalseColour, c_uint, .{
+            const impl = gobject.ext.defineProperty(name, DisplayHeightmap, c_uint, .{
                 .nick = "Gradient Resolution",
                 .blurb = "How many samples are taken from the gradient when mapping values",
-                .default = 16,
-                .minimum = 1,
+                .default = 1024,
+                .minimum = 2,
                 .maximum = 65536,
                 .accessor = .{ .getter = &getResolution, .setter = &setResolution },
                 .construct = true,
@@ -45,10 +44,10 @@ const DisplayFalseColour = extern struct {
 
         pub const seaLevel = struct {
             pub const name = "seaLevel";
-            const impl = gobject.ext.defineProperty(name, DisplayFalseColour, f64, .{
+            const impl = gobject.ext.defineProperty(name, DisplayHeightmap, f64, .{
                 .nick = "Sea Level",
                 .blurb = "What lightness level is considered sea level (0.0–1.0)",
-                .default = 0.357,
+                .default = 0.369,
                 .minimum = 0.0,
                 .maximum = 1.0,
                 .accessor = .{ .getter = &getSeaLevel, .setter = &setSeaLevel },
@@ -58,55 +57,55 @@ const DisplayFalseColour = extern struct {
 
     };
 
-    fn getResolution(self: *const DisplayFalseColour) c_uint {
+    fn getResolution(self: *const DisplayHeightmap) c_uint {
         return self.resolution;
     }
 
-    fn setResolution(self: *DisplayFalseColour, value: c_uint) void {
+    fn setResolution(self: *DisplayHeightmap, value: c_uint) void {
         if(self.resolution != value) {
             self.resolution = value;
             self.rebuildBuffer();
         }
     }
 
-    fn getSeaLevel(self: *const DisplayFalseColour) f64 {
+    fn getSeaLevel(self: *const DisplayHeightmap) f64 {
         return self.seaLevel;
     }
 
-    fn setSeaLevel(self: *DisplayFalseColour, value: f64) void {
+    fn setSeaLevel(self: *DisplayHeightmap, value: f64) void {
         if(self.seaLevel != value) {
             self.seaLevel = value;
             self.resampleGradient();
         }
     }
 
-    pub fn new() *DisplayFalseColour {
-        return gobject.ext.newInstance(DisplayFalseColour, .{ });
+    pub fn new() *DisplayHeightmap {
+        return gobject.ext.newInstance(DisplayHeightmap, .{ });
     }
 
-    pub fn as(self: *DisplayFalseColour, comptime T: type) *T {
+    pub fn as(self: *DisplayHeightmap, comptime T: type) *T {
         return gobject.ext.as(T, self);
     }
 
     fn init(instance: *gobject.TypeInstance, _: *gobject.TypeClass) callconv(.c) void {
-        const self: *DisplayFalseColour = @ptrCast(instance);
+        const self: *DisplayHeightmap = @ptrCast(instance);
         self.private = std.heap.c_allocator.create(Private) catch @panic("Out of Memory");
         self.private.* = .{};
     }
 
-    fn finalize(self: *DisplayFalseColour) callconv(.c) void {
+    fn finalize(self: *DisplayHeightmap) callconv(.c) void {
         if(self.private.buffer) |buffer| {
             self.private.alloc.free(buffer);
         }
         self.private.alloc.destroy(self.private);
     }
 
-    fn constructed(self: *DisplayFalseColour) callconv(.c) void {
+    fn constructed(self: *DisplayHeightmap) callconv(.c) void {
         gobject.Object.virtual_methods.constructed.call(Class.parent, &self.parent_instance);
     }
 
     fn convertBuffer(
-        self: *DisplayFalseColour,
+        self: *DisplayHeightmap,
         buffer: *gegl.Buffer,
         area: *gegl.Rectangle
     ) callconv(.c) void {
@@ -131,7 +130,7 @@ const DisplayFalseColour = extern struct {
     }
 
     // Reallocate the buffer and build a new one at the new resolution
-    fn rebuildBuffer(self: *DisplayFalseColour) void {
+    fn rebuildBuffer(self: *DisplayHeightmap) void {
         if(self.resolution > 0) {
             if(self.private.buffer) |buffer| {
                 self.private.alloc.free(buffer);
@@ -142,12 +141,13 @@ const DisplayFalseColour = extern struct {
     }
     
     // Resample the gradient at the same resolution, without reallocating the buffer
-    fn resampleGradient(self: *DisplayFalseColour) void {
+    fn resampleGradient(self: *DisplayHeightmap) void {
         if(self.private.buffer) |buffer| {
             const format = babl.format("R'G'B' float");
             var hsv0: [4]f64 = undefined;
             var hsv1: [4]f64 = undefined;
             const mixed = gegl.Color.new("#FFFFFFFF");
+            defer mixed.unref();
             for(buffer, 0..) |*sample, i| {
                 const p: f64 = @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(self.resolution - 1));
                 var mix: f64 = undefined;
@@ -183,7 +183,7 @@ const DisplayFalseColour = extern struct {
         var parent: *Parent.Class = undefined;
 
 
-        pub const Instance = DisplayFalseColour;
+        pub const Instance = DisplayHeightmap;
 
         pub fn as(class: *Class, comptime T: type) *T {
             return gobject.ext.as(T, class);
@@ -207,8 +207,8 @@ const DisplayFalseColour = extern struct {
             // gimpui.ColorDisplay.virtual_methods.changed.implement(class, &changed);
 
 
-            class.parent_class.f_name = "False Colour";
-            class.parent_class.f_help_id = "gimp-colordisplay-falsecolour";
+            class.parent_class.f_name = "Heightmap";
+            class.parent_class.f_help_id = "gimp-colordisplay-heightmap";
             class.parent_class.f_icon_name = "gimp-display-filter";
 
             parent = @ptrCast(gobject.TypeClass.peekParent(ptr));
@@ -255,11 +255,11 @@ const DisplayFalseColour = extern struct {
 
 
 // GimpModuleInfo declares these non-const for some reason
-var purpose = "False colour display filter".*;
+var purpose = "False colour display filter with heightmap gradient".*;
 var author = "David Osborne <david.osborne@protonmail.com>".*;
 var version = "v0.1".*;
 var copyright = "(c) 2025, released under the GPL".*;
-var date = "May 16, 2025".*;
+var date = "May 23, 2025".*;
 var display_falsecolour_info: gimp.ModuleInfo =
 .{
     .f_abi_version = gimp.MODULE_ABI_VERSION,
@@ -279,21 +279,21 @@ export fn gimp_module_query (_: *gobject.TypeModule) callconv(.C) *gimp.ModuleIn
 export fn gimp_module_register(module: *gobject.TypeModule) callconv(.C) bool
 {
     const typeInfo = gobject.TypeInfo{
-        .f_class_size = @sizeOf(DisplayFalseColour.Class),
+        .f_class_size = @sizeOf(DisplayHeightmap.Class),
         .f_base_init = null,
         .f_base_finalize = null,
-        .f_class_init = &DisplayFalseColour.Class.init,
+        .f_class_init = &DisplayHeightmap.Class.init,
         .f_class_finalize = null,
         .f_class_data = null,
-        .f_instance_size = @sizeOf(DisplayFalseColour),
+        .f_instance_size = @sizeOf(DisplayHeightmap),
         .f_n_preallocs = 0,      // n_preallocs
-        .f_instance_init = &DisplayFalseColour.init,
+        .f_instance_init = &DisplayHeightmap.init,
         .f_value_table = null    // value_table
       };
 
     _ = module.registerType(
         gobject.ext.typeFor(gimpui.ColorDisplay),
-        "DisplayFalseColor",
+        "DisplayHeightmap",
         &typeInfo,
         .{}
     );
