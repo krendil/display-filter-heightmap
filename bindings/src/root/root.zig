@@ -1,0 +1,17 @@
+pub const gimpui3 = @import("gimpui3");
+pub const cairo1 = @import("cairo1");
+pub const gobject2 = @import("gobject2");
+pub const glib2 = @import("glib2");
+pub const pango1 = @import("pango1");
+pub const harfbuzz0 = @import("harfbuzz0");
+pub const freetype22 = @import("freetype22");
+pub const gio2 = @import("gio2");
+pub const gmodule2 = @import("gmodule2");
+pub const gtk3 = @import("gtk3");
+pub const xlib2 = @import("xlib2");
+pub const gdk3 = @import("gdk3");
+pub const gdkpixbuf2 = @import("gdkpixbuf2");
+pub const atk1 = @import("atk1");
+pub const gimp3 = @import("gimp3");
+pub const gegl0 = @import("gegl0");
+pub const babl0 = @import("babl0");
