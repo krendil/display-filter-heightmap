@@ -24,6 +24,6 @@ The filter has two settings: Sea Level, and Resolution.
 
 Sea Level is a value between 0 and 1 that determines which greyscale values are mapped to land colours and which are mapped to water colours. The default value is 0.369, which is equivalent to 94/255 and is the default sea level for EU4 heightmaps.
 
-Resolution is the number of points from the gradient that will be cached and used to render the image. Lower values will introduce more banding artifacts but use less memory. The default value of 1024 should result in no visible banding with the default gradient, and will use 3KiB of memory for the cache.
+Resolution is the number of points from the gradient that will be cached and used to render the image. Lower values will introduce more banding artifacts but use less memory. The default value of 1024 should result in no visible banding with the default gradient, and will use 12KiB of memory for the cache.
 
 You may need to disable and re-enable the display filter for changed settings to become visible.
